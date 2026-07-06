@@ -1,69 +1,145 @@
-# DAM-Scout — **智能素材策展助手**
+# DAM-Scout 智能素材策展助手
 
-基于 RAG + LangGraph 的智能素材策展助手。用户输入自然语言需求，系统自动分析意图、规划检索任务、从向量数据库中召回匹配素材，由 LLM 生成专业策展方案。
+基于 RAG + LangGraph 的智能素材策展引擎。用户输入自然语言需求，系统自动分析意图、规划检索任务、从向量数据库中召回匹配素材，由 LLM 生成专业策展方案。
 
-## 架构
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.139+-009688?logo=fastapi&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-1.2+-1C3C3C)
+![LangChain](https://img.shields.io/badge/LangChain-1.3+-1C3C3C)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-向量数据库-DB4BDB)
+![DashScope](https://img.shields.io/badge/DashScope%20Qwen-turbo-FF6A00?logo=alibabacloud&logoColor=white)
+![DashScope Embedding](https://img.shields.io/badge/DashScope%20Embedding-v3-FF6A00?logo=alibabacloud&logoColor=white)
+![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI-47848F)
 
+---
+
+## 系统架构
+
+```mermaid
+graph LR
+    A[Spring Boot] -- REST --> B[DAM-Scout]
+
+    subgraph DAM-Scout
+        C[FastAPI] --> D[LangGraph]
+        D --> E[Retriever]
+        D --> F[Generator]
+    end
+
+    subgraph External
+        G[ChromaDB]
+        H[DashScope]
+    end
+
+    E --> G
+    F --> H
+    B --> C
 ```
-用户需求（自然语言）
-       │
-       ▼
-  Intent Analyzer    ← 行业 / 用途 / 场景 / 风格
-       │
-       ▼
-  Planner            ← 生成多个检索任务
-       │
-       ▼
-  Retriever          ← DashScope Embedding → ChromaDB
-       │
-       ▼
-  Filter             ← 去重 / 相关性过滤
-       │
-       ▼
-  Generator          ← Qwen 生成策展方案 + 推荐理由
+
+### LangGraph 5 节点工作流
+
+```mermaid
+graph TB
+    A[用户需求] --> B[Intent Analyzer<br/>意图分析]
+    B --> C[Planner<br/>任务规划]
+    C --> D[Retriever<br/>向量召回]
+    D --> E[Filter<br/>过滤去重]
+    E --> F[Generator<br/>方案生成]
+    F --> G[策展方案 + 推荐素材]
+
+    style B fill:#E8F5E9
+    style C fill:#E3F2FD
+    style D fill:#FFF3E0
+    style E fill:#FCE4EC
+    style F fill:#F3E5F5
 ```
 
-## 技术栈
+## 功能特性
 
-| 组件 | 技术 |
-|------|------|
-| 框架 | FastAPI + Uvicorn |
-| LLM | 阿里百炼 Qwen（qwen-turbo）/ Ollama（可切换） |
-| Embedding | 阿里百炼 DashScope text-embedding-v3（1024 维，云端） |
-| 向量数据库 | ChromaDB（本地持久化） |
-| 工作流 | LangGraph StateGraph |
-| LLM 适配 | LangChain ChatOpenAI |
+### 策展搜索（主接口）
+- 用户输入自然语言需求（如"电商大促的科技感横幅"）
+- 自动提取行业、用途、场景、风格 4 类结构化意图
+- 基于意图生成 2-3 组多路检索任务，提高召回覆盖率
+- Top-5 语义检索 + 元数据过滤 + 结果去重
+- 大模型生成包含主视觉推荐、配色建议、搭配说明的策展方案
 
-## 项目结构
+### 向量管理
+- 图片入库：元信息向量化存入 ChromaDB（1024 维）
+- 增删改同步：Spring Boot 通过 @Async 自动同步
+- 批量导入脚本：MySQL → ChromaDB 全量同步
 
+### 双模式 LLM
+- **云端模式**：DashScope Qwen-Turbo（默认，速度快）
+- **本地模式**：Ollama Qwen3:4b（离线可用）
+
+## 服务访问
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| RAG 服务 | http://localhost:8000 | FastAPI 主服务 |
+| Swagger 文档 | http://localhost:8000/docs | API 接口文档 |
+| 前端页面 | http://localhost:5173/ai_search | AI 搜图页面 |
+| 后端中转 | http://localhost:8123/api/ai/search | Spring Boot 转发接口 |
+
+## API 接口
+
+### POST /scout/search — 策展搜索
+
+**请求：**
+
+```json
+{
+  "query": "给电商大促准备一组科技感的横幅和背景图",
+  "top_k": 5
+}
 ```
-dam-scout/
-├── app/
-│   ├── main.py                  # FastAPI 入口
-│   ├── config.py                # 环境变量配置
-│   ├── llm/                     # LLM 适配层
-│   ├── graph/                   # LangGraph 工作流
-│   │   ├── state.py             # 状态定义
-│   │   ├── workflow.py          # 5 节点 DAG
-│   │   └── nodes/               # intent / planner / retriever / filter / generator
-│   ├── models/dto.py            # Pydantic 数据模型
-│   ├── routers/                 # API 路由
-│   │   ├── embedding.py         # 向量 CRUD
-│   │   ├── rag.py               # 基础 RAG 搜图
-│   │   └── scout.py             # 策展助手（主接口）
-│   ├── services/                # 业务服务
-│   │   ├── embedding_service.py # DashScope Embedding API
-│   │   ├── llm_service.py       # LLM 兼容层
-│   │   └── rag_service.py       # 基础 RAG
-│   └── vectorstore/
-│       └── chroma_manager.py    # ChromaDB 封装
-├── springboot/                  # Spring Boot 集成文件（可直接复制到主项目）
-├── sync_embeddings.py           # 批量同步脚本（MySQL → ChromaDB）
-├── .env.example                 # 环境变量模板
-└── requirements.txt
+
+**响应：**
+
+```json
+{
+  "intent": {
+    "industry": "电商",
+    "purpose": "大促活动",
+    "scene": "线上推广",
+    "style": "科技感"
+  },
+  "tasks": [
+    { "task_type": "banner", "description": "..." }
+  ],
+  "recommendations": [
+    {
+      "pictureId": "1001",
+      "title": "蓝色科技横幅",
+      "category": "banner",
+      "score": 0.92,
+      "task_type": "banner",
+      "reason": "深蓝渐变背景搭配几何线条，符合科技感调性"
+    }
+  ],
+  "answer": "根据您的需求分析，为您策划了一组科技感素材..."
+}
+```
+
+### 向量管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/embedding/add` | 图片入库，生成向量 |
+| DELETE | `/embedding/{pictureId}` | 删除图片向量 |
+| PUT | `/embedding/update` | 更新图片向量 |
+
+### POST /rag/search — 基础 RAG 搜图
+
+```json
+{ "query": "科技感背景", "top_k": 5 }
 ```
 
 ## 快速开始
+
+### 环境要求
+
+- Python 3.11+
+- DashScope API Key（[阿里百炼控制台](https://bailian.console.aliyun.com/) 获取）
 
 ### 1. 克隆 & 创建虚拟环境
 
@@ -94,8 +170,6 @@ MODEL_PROVIDER=dashscope
 DASHSCOPE_API_KEY=sk-your-actual-key-here
 ```
 
-> API Key 获取：[阿里百炼控制台](https://bailian.console.aliyun.com/)
-
 ### 4. 启动服务
 
 ```bash
@@ -114,60 +188,6 @@ python sync_embeddings.py
 ```
 
 后续图片的增删改会通过 Spring Boot 自动同步向量。
-
-## API 接口
-
-### POST /scout/search — 策展搜索（主接口）
-
-**请求：**
-
-```json
-{
-  "query": "给电商大促准备一组科技感的横幅和背景图",
-  "top_k": 5
-}
-```
-
-**响应：**
-
-```json
-{
-  "intent": {
-    "industry": "电商",
-    "purpose": "大促活动",
-    "scene": "线上推广",
-    "style": "科技感"
-  },
-  "tasks": [
-    { "task_type": "banner", "description": "..." }
-  ],
-  "recommendations": [
-    {
-      "pictureId": 1001,
-      "title": "蓝色科技横幅",
-      "category": "banner",
-      "score": 0.92,
-      "task_type": "banner",
-      "reason": "深蓝渐变背景搭配几何线条，符合科技感调性"
-    }
-  ],
-  "answer": "根据您的需求分析，为您策划了一组科技感素材..."
-}
-```
-
-### 向量管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/embedding/add` | 图片入库，生成向量 |
-| DELETE | `/embedding/{pictureId}` | 删除图片向量 |
-| PUT | `/embedding/update` | 更新图片向量 |
-
-### POST /rag/search — 基础 RAG 搜图
-
-```json
-{ "query": "科技感背景", "top_k": 5 }
-```
 
 ## 配置说明
 
