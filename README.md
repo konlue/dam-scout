@@ -227,11 +227,11 @@ MODEL_PROVIDER=ollama
 
 **AI 搜图主页**
 
-![AI 搜索主页](screenshots/ai-search-home.jpeg)
+![AI 搜索主页](https://raw.githubusercontent.com/konlue/dam-scout/main/screenshots/ai-search-home.jpeg)
 
 **策展结果**
 
-![策展结果](screenshots/ai-search-result.jpeg)
+![策展结果](https://raw.githubusercontent.com/konlue/dam-scout/main/screenshots/ai-search-result.jpeg)
 
 ## 许可证
 
